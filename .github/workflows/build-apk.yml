@@ -1,0 +1,107 @@
+name: Build XU Wallet APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'xu-wallet/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        required: false
+        default: 'apk'
+        type: choice
+        options:
+          - apk
+          - preview
+          - production
+
+jobs:
+  build:
+    name: EAS Build (APK)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: xu-wallet
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: xu-wallet/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Set up Expo & EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Verify EAS configuration
+        run: eas build:inspect --platform android --profile ${{ github.event.inputs.profile || 'apk' }} --output ./eas-inspect
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK via EAS
+        id: eas_build
+        run: |
+          eas build \
+            --platform android \
+            --profile ${{ github.event.inputs.profile || 'apk' }} \
+            --non-interactive \
+            --no-wait \
+            --json \
+            > build-output.json
+          cat build-output.json
+          BUILD_ID=$(cat build-output.json | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); const j=JSON.parse(d); console.log(Array.isArray(j)?j[0].id:j.id);")
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Build submitted: $BUILD_ID"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_RUSTOX_RPC: ${{ secrets.EXPO_PUBLIC_RUSTOX_RPC || 'https://rpc.rustox.io' }}
+          EXPO_PUBLIC_RUSTOX_BACKUP_RPC: ${{ secrets.EXPO_PUBLIC_RUSTOX_BACKUP_RPC || 'https://rpc-backup.rustox.io' }}
+          EXPO_PUBLIC_RPC_ETH: ${{ secrets.EXPO_PUBLIC_RPC_ETH || 'https://eth.llamarpc.com' }}
+          EXPO_PUBLIC_RPC_BNB: ${{ secrets.EXPO_PUBLIC_RPC_BNB || 'https://bsc-dataseed.binance.org' }}
+          EXPO_PUBLIC_RPC_POLYGON: ${{ secrets.EXPO_PUBLIC_RPC_POLYGON || 'https://polygon-rpc.com' }}
+
+      - name: Wait for EAS build and download APK
+        run: |
+          echo "Waiting for build ${{ steps.eas_build.outputs.build_id }} to complete..."
+          eas build:wait --id ${{ steps.eas_build.outputs.build_id }}
+          # Download the artifact URL
+          ARTIFACT_URL=$(eas build:view --id ${{ steps.eas_build.outputs.build_id }} --json | \
+            node -e "const d=require('fs').readFileSync('/dev/stdin','utf8'); const j=JSON.parse(d); console.log(j.artifacts?.buildUrl || j.buildArtifactsUrl || '');")
+          echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_ENV
+          if [ -n "$ARTIFACT_URL" ]; then
+            curl -L "$ARTIFACT_URL" -o xu-wallet.apk
+            echo "APK downloaded successfully"
+          else
+            echo "No artifact URL found — check EAS dashboard"
+          fi
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xu-wallet-${{ github.sha }}-apk
+          path: xu-wallet/xu-wallet.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Comment build info on commit
+        if: github.event_name == 'push'
+        run: |
+          echo "## XU Wallet APK Build" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Build ID:** \`${{ steps.eas_build.outputs.build_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Profile:** \`${{ github.event.inputs.profile || 'apk' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View build status at: https://expo.dev/accounts/[YOUR_ACCOUNT]/projects/xu-wallet/builds" >> $GITHUB_STEP_SUMMARY
