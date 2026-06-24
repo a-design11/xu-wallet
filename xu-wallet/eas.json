@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "20.11.1",
+      "env": {
+        "EXPO_PUBLIC_RUSTOX_RPC": "https://rpc.rustox.io",
+        "EXPO_PUBLIC_RUSTOX_BACKUP_RPC": "https://rpc-backup.rustox.io",
+        "EXPO_PUBLIC_RUSTOX_EXPLORER": "https://explorer.rustox.io",
+        "EXPO_PUBLIC_RPC_ETH": "https://eth.llamarpc.com",
+        "EXPO_PUBLIC_RPC_BNB": "https://bsc-dataseed.binance.org",
+        "EXPO_PUBLIC_RPC_POLYGON": "https://polygon-rpc.com"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "extends": "base"
+    },
+    "apk": {
+      "extends": "base",
+      "android": { "buildType": "apk" }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

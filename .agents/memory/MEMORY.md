@@ -1,0 +1,2 @@
+- [XU Wallet architecture](xu-wallet-arch.md) — multi-group BIP44 wallet; each group = independent seed, unlimited sub-accounts.
+- [XU Wallet workflow](xu-wallet-workflow.md) — uses local expo binary, runs at port 3000.

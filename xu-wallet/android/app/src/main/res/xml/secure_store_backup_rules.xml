@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude the Expo SecureStore SQLite database from auto backup. -->
+    <exclude domain="database" path="SecureStore"/>
+    <exclude domain="sharedpref" path="SecureStore"/>
+</full-backup-content>

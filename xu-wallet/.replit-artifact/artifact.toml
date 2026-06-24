@@ -1,0 +1,13 @@
+kind = "expo"
+previewPath = "/"
+title = "XU Wallet"
+version = "1.0.0"
+id = "xu-wallet-web-preview"
+
+[[services]]
+localPort = 3000
+name = "XU Wallet Web"
+paths = ["/"]
+
+[services.development]
+run = "cd xu-wallet && EXPO_NO_TELEMETRY=1 npx expo start --web --port 3000"
