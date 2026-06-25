@@ -6,57 +6,55 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text } from '../../../mobile/theme/primitives/Text';
 import { useTheme } from '../../../mobile/theme/ThemeProvider';
 import { useWallet } from '../../../context/WalletContext';
 import { ScreenHeader } from '../../../components/ScreenHeader';
-import { setGraphApiKey, loadGraphApiKey } from '../../../mobile/services/txHistoryService';
+import { setGraphApiKey } from '../../../mobile/services/txHistoryService';
 import { setCoinGeckoApiKey } from '../../../mobile/services/priceService';
-import { saveApiKey, getApiKey } from '../../../mobile/services/walletService';
 
-const GRAPH_STORAGE_KEY = 'xu_wallet_graph_api_key_v1';
-const CG_STORAGE_KEY    = 'xu_wallet_cg_api_key_v1';
+const GRAPH_KEY = 'xu_wallet_graph_api_key_v1';
+const CG_KEY    = 'xu_wallet_cg_api_key_v1';
 
 export default function Settings() {
   const t = useTheme();
   const router = useRouter();
   const {
-    biometricEnabled,
-    setBiometricEnabled,
-    autoLockTimer,
-    setAutoLockTimer,
-    setIsLocked,
-    resetWallet,
-    network,
-    setNetwork,
+    biometricEnabled, setBiometricEnabled,
+    autoLockTimer, setAutoLockTimer,
+    setIsLocked, resetWallet,
+    network, setNetwork,
   } = useWallet();
 
-  // API key modal state
-  const [keyModal, setKeyModal] = useState<'graph' | 'coingecko' | null>(null);
-  const [keyInput, setKeyInput] = useState('');
-  const [keySaved, setKeySaved] = useState(false);
+  // API key modal
+  const [keyModal, setKeyModal]   = useState<'graph' | 'coingecko' | null>(null);
+  const [keyInput, setKeyInput]   = useState('');
+  const [keySaved, setKeySaved]   = useState(false);
   const [graphKeySet, setGraphKeySet] = useState(false);
-  const [cgKeySet, setCgKeySet] = useState(false);
+  const [cgKeySet, setCgKeySet]       = useState(false);
 
-  // Load current key status on mount
   React.useEffect(() => {
-    getApiKey(GRAPH_STORAGE_KEY).then((v) => setGraphKeySet(!!v));
-    getApiKey(CG_STORAGE_KEY).then((v) => setCgKeySet(!!v));
+    AsyncStorage.getItem(GRAPH_KEY).then((v) => setGraphKeySet(!!v?.trim()));
+    AsyncStorage.getItem(CG_KEY).then((v) => setCgKeySet(!!v?.trim()));
   }, []);
 
   const openKeyModal = useCallback(async (type: 'graph' | 'coingecko') => {
-    const storageKey = type === 'graph' ? GRAPH_STORAGE_KEY : CG_STORAGE_KEY;
-    const current = await getApiKey(storageKey);
-    setKeyInput(current ?? '');
+    const raw = await AsyncStorage.getItem(type === 'graph' ? GRAPH_KEY : CG_KEY);
+    setKeyInput(raw ?? '');
     setKeySaved(false);
     setKeyModal(type);
   }, []);
 
   const saveKey = useCallback(async () => {
     if (!keyModal) return;
-    const storageKey = keyModal === 'graph' ? GRAPH_STORAGE_KEY : CG_STORAGE_KEY;
-    const trimmed = keyInput.trim();
-    await saveApiKey(storageKey, trimmed || '');
+    const storeKey = keyModal === 'graph' ? GRAPH_KEY : CG_KEY;
+    const trimmed  = keyInput.trim();
+    if (trimmed) {
+      await AsyncStorage.setItem(storeKey, trimmed);
+    } else {
+      await AsyncStorage.removeItem(storeKey);
+    }
     if (keyModal === 'graph') {
       setGraphApiKey(trimmed || null);
       setGraphKeySet(!!trimmed);
@@ -65,38 +63,34 @@ export default function Settings() {
       setCgKeySet(!!trimmed);
     }
     setKeySaved(true);
-    setTimeout(() => setKeyModal(null), 800);
+    setTimeout(() => setKeyModal(null), 900);
   }, [keyModal, keyInput]);
 
   const clearKey = useCallback(async () => {
     if (!keyModal) return;
-    const storageKey = keyModal === 'graph' ? GRAPH_STORAGE_KEY : CG_STORAGE_KEY;
-    await saveApiKey(storageKey, '');
-    if (keyModal === 'graph') {
-      setGraphApiKey(null);
-      setGraphKeySet(false);
-    } else {
-      setCoinGeckoApiKey(null);
-      setCgKeySet(false);
-    }
+    const storeKey = keyModal === 'graph' ? GRAPH_KEY : CG_KEY;
+    await AsyncStorage.removeItem(storeKey);
+    if (keyModal === 'graph') { setGraphApiKey(null); setGraphKeySet(false); }
+    else { setCoinGeckoApiKey(null); setCgKeySet(false); }
     setKeyInput('');
     setKeyModal(null);
   }, [keyModal]);
 
   const modalTitle = keyModal === 'graph' ? 'The Graph API Key' : 'CoinGecko API Key';
-  const modalHint = keyModal === 'graph'
-    ? 'Get a free key at thegraph.com/studio. Enables richer transaction history via on-chain subgraphs.'
-    : 'Get a key at coingecko.com/api. Increases rate limits for price data.';
+  const modalHint  = keyModal === 'graph'
+    ? 'Get a free key at thegraph.com/studio — enables richer on-chain transaction history.'
+    : 'Get a free key at coingecko.com/api — increases price data rate limits.';
   const modalPlaceholder = keyModal === 'graph'
     ? 'Paste your Graph API key…'
     : 'Paste your CoinGecko API key…';
+  const isSet = keyModal === 'graph' ? graphKeySet : cgKeySet;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.palette.bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <ScreenHeader title="Settings" />
 
-        {/* ── Security ─────────────────────────────────── */}
+        {/* Security */}
         <Section title="Security">
           <Row
             icon="finger-print-outline"
@@ -115,17 +109,14 @@ export default function Settings() {
             label="Auto-lock"
             right={
               <Pressable
-                onPress={() => {
-                  const opts = [0, 1, 5, 15, 60];
-                  Alert.alert(
-                    'Auto-lock',
-                    'Lock the wallet when in the background.',
-                    opts.map((m) => ({
+                onPress={() =>
+                  Alert.alert('Auto-lock', 'Lock when in the background.',
+                    [0, 1, 5, 15, 60].map((m) => ({
                       text: m === 0 ? 'Off' : `${m} min`,
                       onPress: () => setAutoLockTimer(m),
                     }))
-                  );
-                }}
+                  )
+                }
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
               >
                 <Text variant="bodyMedium" color="textMuted">
@@ -139,7 +130,7 @@ export default function Settings() {
           <Row icon="key-outline" label="Change PIN" onPress={() => router.push('/settings/security')} />
         </Section>
 
-        {/* ── Networks ──────────────────────────────────── */}
+        {/* Networks */}
         <Section title="Networks">
           <Row
             icon="globe-outline"
@@ -156,10 +147,13 @@ export default function Settings() {
               >
                 <View style={{
                   paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-                  backgroundColor: network === 'mainnet' ? t.palette.success + '18' : t.palette.warning + '18',
+                  backgroundColor: network === 'mainnet'
+                    ? t.palette.success + '18' : t.palette.warning + '18',
                 }}>
-                  <Text style={{ fontFamily: 'InterTight_600SemiBold', fontSize: 12,
-                    color: network === 'mainnet' ? t.palette.success : t.palette.warning }}>
+                  <Text style={{
+                    fontFamily: 'InterTight_600SemiBold', fontSize: 12,
+                    color: network === 'mainnet' ? t.palette.success : t.palette.warning,
+                  }}>
                     {network.toUpperCase()}
                   </Text>
                 </View>
@@ -170,54 +164,31 @@ export default function Settings() {
           <Row icon="server-outline" label="Custom RPC" onPress={() => router.push('/settings/networks')} />
         </Section>
 
-        {/* ── API Keys ──────────────────────────────────── */}
+        {/* API Keys */}
         <Section title="API Keys">
-          <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>
-            <Text style={{ fontFamily: 'InterTight_400Regular', fontSize: 12, color: t.palette.textMuted, lineHeight: 18, marginBottom: 12 }}>
-              Optional keys to unlock richer data. Never shared with third parties.
+          <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+            <Text style={{
+              fontFamily: 'InterTight_400Regular', fontSize: 12,
+              color: t.palette.textMuted, lineHeight: 18,
+            }}>
+              Optional — unlocks richer data. Keys are stored locally and never shared.
             </Text>
           </View>
           <Row
             icon="git-network-outline"
             label="The Graph API Key"
-            right={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={{
-                  paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6,
-                  backgroundColor: graphKeySet ? t.palette.success + '18' : t.palette.elevated,
-                }}>
-                  <Text style={{ fontFamily: 'InterTight_600SemiBold', fontSize: 11,
-                    color: graphKeySet ? t.palette.success : t.palette.textFaint }}>
-                    {graphKeySet ? 'SET' : 'NOT SET'}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={14} color={t.palette.textMuted} />
-              </View>
-            }
             onPress={() => openKeyModal('graph')}
+            right={<KeyBadge set={graphKeySet} />}
           />
           <Row
             icon="stats-chart-outline"
             label="CoinGecko API Key"
-            right={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={{
-                  paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6,
-                  backgroundColor: cgKeySet ? t.palette.success + '18' : t.palette.elevated,
-                }}>
-                  <Text style={{ fontFamily: 'InterTight_600SemiBold', fontSize: 11,
-                    color: cgKeySet ? t.palette.success : t.palette.textFaint }}>
-                    {cgKeySet ? 'SET' : 'NOT SET'}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={14} color={t.palette.textMuted} />
-              </View>
-            }
             onPress={() => openKeyModal('coingecko')}
+            right={<KeyBadge set={cgKeySet} />}
           />
         </Section>
 
-        {/* ── Wallet ────────────────────────────────────── */}
+        {/* Wallet */}
         <Section title="Wallet">
           <Row
             icon="refresh-outline"
@@ -226,17 +197,14 @@ export default function Settings() {
             onPress={() =>
               Alert.alert(
                 'Reset wallet?',
-                'This deletes your wallet from this device. Make sure you have your recovery phrase.',
-                [
-                  { text: 'Cancel' },
-                  { text: 'Reset', style: 'destructive', onPress: () => resetWallet() },
-                ]
+                'Deletes your wallet from this device. Make sure you have your seed phrase.',
+                [{ text: 'Cancel' }, { text: 'Reset', style: 'destructive', onPress: () => resetWallet() }]
               )
             }
           />
         </Section>
 
-        {/* ── About ─────────────────────────────────────── */}
+        {/* About */}
         <Section title="About">
           <Row icon="information-circle-outline" label="Version"
             right={<Text variant="bodyMedium" color="textMuted">v2.0.0</Text>} />
@@ -247,20 +215,21 @@ export default function Settings() {
         </Section>
       </ScrollView>
 
-      {/* ── API Key Modal ─────────────────────────────── */}
+      {/* API Key Modal */}
       <Modal visible={!!keyModal} animationType="slide" transparent presentationStyle="overFullScreen">
         <Pressable
-          style={{ flex: 1, backgroundColor: '#00000088', justifyContent: 'flex-end' }}
+          style={{ flex: 1, backgroundColor: '#00000090', justifyContent: 'flex-end' }}
           onPress={() => setKeyModal(null)}
         >
-          <Pressable onPress={(e) => e.stopPropagation()} style={{
-            backgroundColor: t.palette.surface,
-            borderTopLeftRadius: t.radius.xl,
-            borderTopRightRadius: t.radius.xl,
-            padding: 24,
-            paddingBottom: 40,
-          }}>
-            {/* Handle */}
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: t.palette.surface,
+              borderTopLeftRadius: t.radius.xl,
+              borderTopRightRadius: t.radius.xl,
+              padding: 24, paddingBottom: 42,
+            }}
+          >
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: t.palette.hairline, alignSelf: 'center', marginBottom: 20 }} />
 
             <Text style={{ fontFamily: 'Manrope_700Bold', fontSize: 18, color: t.palette.text, marginBottom: 8 }}>
@@ -271,12 +240,8 @@ export default function Settings() {
             </Text>
 
             <View style={{
-              backgroundColor: t.palette.elevated,
-              borderRadius: t.radius.md,
-              borderWidth: 1,
-              borderColor: t.palette.hairline,
-              padding: 14,
-              marginBottom: 16,
+              backgroundColor: t.palette.elevated, borderRadius: t.radius.md,
+              borderWidth: 1, borderColor: t.palette.hairline, padding: 14, marginBottom: 16,
             }}>
               <TextInput
                 value={keyInput}
@@ -289,22 +254,20 @@ export default function Settings() {
                 style={{
                   color: t.palette.text,
                   fontFamily: 'JetBrainsMono_400Regular',
-                  fontSize: 13,
-                  minHeight: 40,
+                  fontSize: 13, minHeight: 40,
                 }}
               />
             </View>
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              {(keyModal === 'graph' ? graphKeySet : cgKeySet) && (
+              {isSet && (
                 <Pressable
                   onPress={clearKey}
                   style={({ pressed }) => ({
                     flex: 1, paddingVertical: 16, borderRadius: t.radius.md,
                     backgroundColor: t.palette.danger + '18',
                     borderWidth: 1, borderColor: t.palette.danger + '40',
-                    alignItems: 'center',
-                    opacity: pressed ? 0.8 : 1,
+                    alignItems: 'center', opacity: pressed ? 0.8 : 1,
                   })}
                 >
                   <Text style={{ fontFamily: 'Manrope_700Bold', fontSize: 15, color: t.palette.danger }}>Clear</Text>
@@ -315,9 +278,8 @@ export default function Settings() {
                 style={({ pressed }) => ({
                   flex: 2, paddingVertical: 16, borderRadius: t.radius.md,
                   backgroundColor: keySaved ? t.palette.success : t.palette.rustox,
-                  alignItems: 'center',
-                  flexDirection: 'row', justifyContent: 'center', gap: 8,
-                  opacity: pressed ? 0.85 : 1,
+                  alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
+                  gap: 8, opacity: pressed ? 0.85 : 1,
                 })}
               >
                 <Ionicons name={keySaved ? 'checkmark-circle' : 'save-outline'} size={18} color="#fff" />
@@ -333,20 +295,36 @@ export default function Settings() {
   );
 }
 
+function KeyBadge({ set }: { set: boolean }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <View style={{
+        paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6,
+        backgroundColor: set ? t.palette.success + '18' : t.palette.elevated,
+      }}>
+        <Text style={{
+          fontFamily: 'InterTight_600SemiBold', fontSize: 11,
+          color: set ? t.palette.success : t.palette.textFaint,
+        }}>
+          {set ? 'SET ✓' : 'NOT SET'}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={14} color={t.palette.textMuted} />
+    </View>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const t = useTheme();
   return (
     <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-      <Text style={{ fontFamily: 'InterTight_500Medium', fontSize: 11, color: t.palette.textMuted,
-        letterSpacing: 0.6, marginBottom: 8 }}>
+      <Text style={{ fontFamily: 'InterTight_500Medium', fontSize: 11, color: t.palette.textMuted, letterSpacing: 0.6, marginBottom: 8 }}>
         {title.toUpperCase()}
       </Text>
       <View style={{
-        backgroundColor: t.palette.surface,
-        borderRadius: t.radius.lg,
-        borderWidth: 1,
-        borderColor: t.palette.hairline,
-        overflow: 'hidden',
+        backgroundColor: t.palette.surface, borderRadius: t.radius.lg,
+        borderWidth: 1, borderColor: t.palette.hairline, overflow: 'hidden',
       }}>
         {children}
       </View>
@@ -372,11 +350,7 @@ function Row({
       })}
     >
       <Ionicons name={icon} size={18} color={danger ? t.palette.danger : t.palette.text} />
-      <Text
-        variant="body"
-        color={danger ? 'danger' : 'text'}
-        style={{ flex: 1, marginLeft: 12 }}
-      >
+      <Text variant="body" color={danger ? 'danger' : 'text'} style={{ flex: 1, marginLeft: 12 }}>
         {label}
       </Text>
       {right ?? (onPress ? <Ionicons name="chevron-forward" size={14} color={t.palette.textFaint} /> : null)}

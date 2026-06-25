@@ -1,2 +1,3 @@
-- [XU Wallet architecture](xu-wallet-arch.md) — multi-group BIP44 wallet; each group = independent seed, unlimited sub-accounts.
-- [XU Wallet workflow](xu-wallet-workflow.md) — uses local expo binary, runs at port 3000.
+- [XU Wallet workflow](xu-wallet-workflow.md) — must use local binary, not npx; cd xu-wallet first
+- [XU Wallet API keys](xu-wallet-api-keys.md) — Graph key via AsyncStorage GRAPH_KEY, CG via CG_KEY; NOT walletService saveApiKey
+- [XU Wallet storage keys](xu-wallet-storage.md) — canonical storage key names for all wallet data

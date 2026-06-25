@@ -39,7 +39,7 @@ export default function TokenDetail() {
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
 
-  const chain = entry?.chain ?? ctxToken?.blockchain ?? 'ethereum';
+  const chain = (entry?.chain ?? ctxToken?.blockchain ?? 'ethereum') as import('../../mobile/services/chainService').Chain;
   const meta = CHAIN_META[chain];
   const accent = meta?.accent ?? t.palette.evm;
   const symbol = entry?.symbol ?? ctxToken?.symbol ?? '?';
@@ -62,7 +62,7 @@ export default function TokenDetail() {
       } else if (isNative) {
         const cg = CHAIN_META[chain as any]?.coingeckoId;
         if (cg) {
-          const prices = await getPrices([cg]).catch(() => ({}));
+          const prices = await getPrices([cg]).catch(() => ({} as Record<string, import('../../mobile/services/priceService').PriceInfo>));
           const p = prices[cg];
           if (p) { setPrice(p.usd); setChange(p.change24h); }
         }
