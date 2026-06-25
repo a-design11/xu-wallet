@@ -12,10 +12,9 @@ import { useTheme } from '../../../mobile/theme/ThemeProvider';
 import { useWallet } from '../../../context/WalletContext';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { setGraphApiKey } from '../../../mobile/services/txHistoryService';
-import { setCoinGeckoApiKey } from '../../../mobile/services/priceService';
+import { setGraphPriceKey } from '../../../mobile/services/priceService';
 
 const GRAPH_KEY = 'xu_wallet_graph_api_key_v1';
-const CG_KEY    = 'xu_wallet_cg_api_key_v1';
 
 export default function Settings() {
   const t = useTheme();
@@ -27,63 +26,52 @@ export default function Settings() {
     network, setNetwork,
   } = useWallet();
 
-  // API key modal
-  const [keyModal, setKeyModal]   = useState<'graph' | 'coingecko' | null>(null);
-  const [keyInput, setKeyInput]   = useState('');
-  const [keySaved, setKeySaved]   = useState(false);
-  const [graphKeySet, setGraphKeySet] = useState(false);
-  const [cgKeySet, setCgKeySet]       = useState(false);
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [keyInput, setKeyInput]         = useState('');
+  const [keySaved, setKeySaved]         = useState(false);
+  const [graphKeySet, setGraphKeySet]   = useState(
+    !!(process.env as any).EXPO_PUBLIC_GRAPH_API_KEY?.trim()
+  );
 
   React.useEffect(() => {
+    if ((process.env as any).EXPO_PUBLIC_GRAPH_API_KEY?.trim()) {
+      setGraphKeySet(true);
+      return;
+    }
     AsyncStorage.getItem(GRAPH_KEY).then((v) => setGraphKeySet(!!v?.trim()));
-    AsyncStorage.getItem(CG_KEY).then((v) => setCgKeySet(!!v?.trim()));
   }, []);
 
-  const openKeyModal = useCallback(async (type: 'graph' | 'coingecko') => {
-    const raw = await AsyncStorage.getItem(type === 'graph' ? GRAPH_KEY : CG_KEY);
+  const openKeyModal = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(GRAPH_KEY);
     setKeyInput(raw ?? '');
     setKeySaved(false);
-    setKeyModal(type);
+    setKeyModalOpen(true);
   }, []);
 
   const saveKey = useCallback(async () => {
-    if (!keyModal) return;
-    const storeKey = keyModal === 'graph' ? GRAPH_KEY : CG_KEY;
-    const trimmed  = keyInput.trim();
+    const trimmed = keyInput.trim();
     if (trimmed) {
-      await AsyncStorage.setItem(storeKey, trimmed);
+      await AsyncStorage.setItem(GRAPH_KEY, trimmed);
     } else {
-      await AsyncStorage.removeItem(storeKey);
+      await AsyncStorage.removeItem(GRAPH_KEY);
     }
-    if (keyModal === 'graph') {
-      setGraphApiKey(trimmed || null);
-      setGraphKeySet(!!trimmed);
-    } else {
-      setCoinGeckoApiKey(trimmed || null);
-      setCgKeySet(!!trimmed);
-    }
+    setGraphApiKey(trimmed || null);
+    setGraphPriceKey(trimmed || null);
+    setGraphKeySet(!!trimmed || !!(process.env as any).EXPO_PUBLIC_GRAPH_API_KEY?.trim());
     setKeySaved(true);
-    setTimeout(() => setKeyModal(null), 900);
-  }, [keyModal, keyInput]);
+    setTimeout(() => setKeyModalOpen(false), 900);
+  }, [keyInput]);
 
   const clearKey = useCallback(async () => {
-    if (!keyModal) return;
-    const storeKey = keyModal === 'graph' ? GRAPH_KEY : CG_KEY;
-    await AsyncStorage.removeItem(storeKey);
-    if (keyModal === 'graph') { setGraphApiKey(null); setGraphKeySet(false); }
-    else { setCoinGeckoApiKey(null); setCgKeySet(false); }
+    await AsyncStorage.removeItem(GRAPH_KEY);
+    setGraphApiKey(null);
+    setGraphPriceKey(null);
+    setGraphKeySet(!!(process.env as any).EXPO_PUBLIC_GRAPH_API_KEY?.trim());
     setKeyInput('');
-    setKeyModal(null);
-  }, [keyModal]);
+    setKeyModalOpen(false);
+  }, []);
 
-  const modalTitle = keyModal === 'graph' ? 'The Graph API Key' : 'CoinGecko API Key';
-  const modalHint  = keyModal === 'graph'
-    ? 'Get a free key at thegraph.com/studio — enables richer on-chain transaction history.'
-    : 'Get a free key at coingecko.com/api — increases price data rate limits.';
-  const modalPlaceholder = keyModal === 'graph'
-    ? 'Paste your Graph API key…'
-    : 'Paste your CoinGecko API key…';
-  const isSet = keyModal === 'graph' ? graphKeySet : cgKeySet;
+  const isSet = graphKeySet;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.palette.bg }}>

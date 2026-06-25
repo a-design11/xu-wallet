@@ -33,25 +33,29 @@ export interface TxRecord {
 }
 
 // ─── Key storage ─────────────────────────────────────────────────────────────
+// Graph key priority: env var (baked at build) → AsyncStorage (user override in Settings).
 
 const KEY_GRAPH  = 'xu_wallet_graph_api_key_v1';
 const KEY_CACHE  = (addr: string, chain: Chain) => `xu_tx_cache_v1_${chain}_${addr.toLowerCase()}`;
 
-let graphApiKey: string | null = null;
+const ENV_GRAPH_KEY = (process.env as any).EXPO_PUBLIC_GRAPH_API_KEY as string | undefined;
+let graphApiKey: string | null = ENV_GRAPH_KEY?.trim() || null;
 
 export function setGraphApiKey(key: string | null) {
-  graphApiKey = key && key.trim() ? key.trim() : null;
-  if (graphApiKey) {
-    AsyncStorage.setItem(KEY_GRAPH, graphApiKey).catch(() => null);
+  graphApiKey = key?.trim() || ENV_GRAPH_KEY?.trim() || null;
+  const userKey = key?.trim();
+  if (userKey && userKey !== ENV_GRAPH_KEY?.trim()) {
+    AsyncStorage.setItem(KEY_GRAPH, userKey).catch(() => null);
   } else {
     AsyncStorage.removeItem(KEY_GRAPH).catch(() => null);
   }
 }
 
 export async function loadGraphApiKey(): Promise<string | null> {
+  if (ENV_GRAPH_KEY?.trim()) return ENV_GRAPH_KEY.trim();
   const k = await AsyncStorage.getItem(KEY_GRAPH).catch(() => null);
   if (k) graphApiKey = k;
-  return k;
+  return graphApiKey;
 }
 
 export function getGraphApiKey(): string | null { return graphApiKey; }
